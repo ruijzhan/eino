@@ -1,0 +1,3 @@
+[submodule "ext/eino-ext"]
+	path = ext/eino-ext
+	url = https://github.com/cloudwego/eino-ext.git
