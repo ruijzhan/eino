@@ -27,10 +27,20 @@ async def generate(
     start_time = time.time()
 
     try:
-        result: ChatResult = await model.ainvoke(messages, config=config)
+        result = await model.ainvoke(messages, config=config)
         duration = time.time() - start_time
         logger.info(f"Generate completed in {duration:.2f}s")
-        return result.content if isinstance(result.content, BaseMessage) else AIMessage(content=result.content)
+
+        # Handle different return types from the model
+        if hasattr(result, 'generations') and result.generations:
+            # ChatResult object
+            return result.generations[0].message
+        elif isinstance(result, BaseMessage):
+            # Direct message object
+            return result
+        else:
+            # Convert to AIMessage if it's just content
+            return AIMessage(content=str(result))
     except Exception as e:
         duration = time.time() - start_time
         logger.error(f"Generate failed after {duration:.2f}s: {e}")

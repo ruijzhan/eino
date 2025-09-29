@@ -3,7 +3,7 @@
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-from template import create_template, create_messages_from_template
+from chat.template import create_template, create_messages_from_template
 
 
 def test_create_template():

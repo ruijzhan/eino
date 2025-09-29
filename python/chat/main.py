@@ -28,7 +28,7 @@ async def main():
     try:
         model = create_openai_chat_model()
         logger.info("Created OpenAI chat model")
-    except ValueError as e:
+    except (ValueError, RuntimeError) as e:
         logger.error(f"Failed to create chat model: {e}")
         print(f"Error: {e}")
         return
@@ -41,6 +41,7 @@ async def main():
     except Exception as e:
         logger.error(f"Generation failed: {e}")
         print(f"Generation error: {e}")
+        return
 
     # Test streaming
     try:
@@ -50,6 +51,7 @@ async def main():
     except Exception as e:
         logger.error(f"Streaming failed: {e}")
         print(f"Streaming error: {e}")
+        return
 
 
 if __name__ == "__main__":

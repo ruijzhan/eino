@@ -1,8 +1,11 @@
 """Streaming functionality for chat responses."""
 
-import time
+import asyncio
 import logging
-from typing import AsyncIterator, Optional
+import sys
+import time
+from typing import AsyncIterator, Optional, TextIO
+from contextlib import asynccontextmanager
 
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
@@ -21,7 +24,8 @@ async def stream(
     start_time = time.time()
 
     try:
-        async for chunk in model.astream(messages, config=config):
+        stream_result = model.astream(messages, config=config)
+        async for chunk in stream_result:
             yield chunk
         duration = time.time() - start_time
         logger.info(f"Stream completed in {duration:.2f}s")
@@ -33,7 +37,38 @@ async def stream(
 
 async def report_stream(stream_iter: AsyncIterator[ChatGenerationChunk]) -> None:
     """Process and report streaming chunks."""
-    async for chunk in stream_iter:
-        if chunk and hasattr(chunk, 'content') and chunk.content:
-            print(chunk.content, end="", flush=True)
+    return await report_stream_with_context(stream_iter, sys.stdout)
+
+
+async def report_stream_with_context(
+    stream_iter: AsyncIterator[ChatGenerationChunk],
+    writer: TextIO
+) -> None:
+    """Process and report streaming chunks with context cancellation support."""
+    async with stream_with_cancellation(stream_iter) as safe_stream:
+        async for chunk in safe_stream:
+            if chunk and hasattr(chunk, 'content') and chunk.content:
+                try:
+                    writer.write(chunk.content)
+                    writer.flush()
+                except (IOError, BrokenPipeError) as e:
+                    logger.error(f"Write error: {e}")
+                    raise
     print()  # New line at the end
+
+
+@asynccontextmanager
+async def stream_with_cancellation(
+    stream_iter: AsyncIterator[ChatGenerationChunk]
+) -> AsyncIterator[ChatGenerationChunk]:
+    """Context manager for handling stream cancellation gracefully."""
+    # Create a wrapper that handles cancellation
+    async def _cancellable_stream():
+        try:
+            async for chunk in stream_iter:
+                yield chunk
+        except asyncio.CancelledError:
+            logger.info("Stream cancelled by context")
+            raise
+
+    yield _cancellable_stream()

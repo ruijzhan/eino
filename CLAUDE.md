@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Testing
+### Go Testing
 ```bash
 # Run all tests with coverage
 go test -race -v -coverprofile=coverage.out -gcflags="all=-l -N" ./...
@@ -16,16 +16,28 @@ go test -race -v ./compose/graph_test.go
 go test -race -v -coverprofile=coverage.out ./compose/... ./schema/...
 ```
 
+### Python Testing
+```bash
+# Run all Python tests
+cd python && pytest tests/ -v
+
+# Run specific test file
+cd python && pytest tests/test_model.py -v
+
+# Run with coverage
+cd python && pytest tests/ --cov=chat --cov-report=html
+```
+
 ### Linting
 ```bash
-# Run golangci-lint (uses .golangci.yaml config)
+# Go linting
 golangci-lint run
-
-# Format imports
 goimports -w .
-
-# Format code
 gofmt -w .
+
+# Python linting
+cd python && ruff check .
+cd python && ruff format .
 ```
 
 ### Go Workspace
@@ -36,24 +48,54 @@ go work use .
 go work sync
 ```
 
+### Python Environment
+```bash
+# Setup Python environment
+cd python && uv pip install -e ".[dev]"
+
+# Run main application
+cd python && python -m chat.main
+```
+
 ## Architecture Overview
 
-Eino is a Go-based LLM application development framework with three core orchestration patterns:
+Eino is a dual-language LLM application development framework with Go and Python implementations:
 
-### 1. **Graph Orchestration** (`compose/`)
+**Recent Features:**
+- **Dual Language Support**: Full Python LangChain implementation alongside Go framework
+- **Enhanced Error Handling**: Robust retry logic with exponential backoff
+- **Improved Streaming**: Context cancellation and I/O error handling
+- **Type Safety**: Configuration validation and comprehensive error handling
+- **Comprehensive Testing**: Full test coverage including streaming and edge cases
+
+### 1. **Go Implementation** (`./`)
+- Native Go framework with three core orchestration patterns
+- High performance with goroutine-based concurrency
+- Compile-time type safety with generics
+- Production-ready with extensive component library
+
+### 2. **Python Implementation** (`python/`)
+- LangChain-based implementation for rapid development
+- Async-first design with proper error handling
+- VS Code debugging support and comprehensive testing
+- Seamless interoperability with Go components
+
+### 3. **Graph Orchestration** (`compose/`)
 - **Graph**: Generic directed graph with type safety
 - **Nodes**: Components (ChatModel, Tool, Retriever, etc.) and Lambda functions
 - **Edges**: Data flow and control flow connections
 - **State**: Thread-safe state management with pre/post handlers
 
-### 2. **Chain Orchestration** (`compose/`)
+### 4. **Chain Orchestration** (`compose/`)
 - **Chain**: Linear sequence of nodes
 - **Parallel Chains**: Concurrent execution patterns
 - **Lambda Functions**: Custom logic integration
 
-### 3. **Workflow Orchestration** (`compose/workflow.go`)
+### 5. **Workflow Orchestration** (`compose/workflow.go`)
 - **Field-level mapping**: Structural data transformation between nodes
 - **Stateful execution**: Enhanced state management
+
+## Go Implementation Details
 
 ### Key Components
 
@@ -119,15 +161,75 @@ Eino is a Go-based LLM application development framework with three core orchest
 - **ProcessState()**: Thread-safe state access API
 - Context-based state propagation with mutex protection
 
-### Key Interfaces to Understand
-- `composableRunnable`: Core executable abstraction
-- `AnyGraph`: Graph interface for nesting
-- `Component`: Component type system
-- `StreamReader[I]`: Streaming interface
+## Python Implementation Details
 
-### Development Notes
-- Framework uses extensive reflection for type inference
-- Heavy emphasis on type safety at compile time
+### Core Modules
+
+#### **chat/model.py**
+- `ModelConfig`: Type-safe configuration with validation
+- `create_openai_chat_model()`: Factory function with retry logic
+- Environment variable management with sensible defaults
+
+#### **chat/generate.py**
+- `generate()`: Core async generation with timing and logging
+- `generate_with_retry()`: Exponential backoff retry logic
+- `is_retryable_error()`: Network-aware error classification
+
+#### **chat/stream.py**
+- `stream()`: Async generator for real-time streaming
+- `report_stream()`: Context cancellation and I/O error handling
+- `stream_with_cancellation()`: Graceful stream termination
+
+#### **chat/template.py**
+- `create_template()`: LangChain ChatPromptTemplate factory
+- `create_messages_from_template()`: Message formatting with chat history
+
+### Key Features
+
+#### Error Handling
+- Comprehensive retry logic with exponential backoff
+- Network error classification and recovery
+- Graceful degradation for non-critical failures
+- Context cancellation support
+
+#### Type Safety
+- Full type hints throughout the codebase
+- `ModelConfig` dataclass with validation
+- Runtime type checking where appropriate
+
+#### Testing Strategy
+- pytest with comprehensive coverage
+- Mock objects for testing without API calls
+- Async test support with pytest-asyncio
+- Environment isolation with mocked variables
+
+### Dependencies
+- **LangChain Core**: Core abstractions and interfaces
+- **LangChain OpenAI**: OpenAI model integration
+- **Python-dotenv**: Environment variable management
+- **pytest**: Testing framework with async support
+- **uv**: Fast Python package manager
+
+## Development Notes
+
+### Go Framework
+- Uses extensive reflection for type inference
+- Heavy emphasis on compile-time type safety
 - Streaming is first-class citizen throughout
 - Graph compilation validates type compatibility
 - State management is opt-in per graph
+
+### Python Implementation
+- Async-first design with proper error handling
+- LangChain-based for rapid development
+- Comprehensive testing with edge cases
+- VS Code debugging support
+- Modern Python packaging with pyproject.toml
+
+### Key Interfaces to Understand
+- `composableRunnable`: Core executable abstraction (Go)
+- `AnyGraph`: Graph interface for nesting (Go)
+- `Component`: Component type system (Go)
+- `StreamReader[I]`: Streaming interface (Go)
+- `BaseChatModel`: LangChain model interface (Python)
+- `ChatPromptTemplate`: LangChain template interface (Python)

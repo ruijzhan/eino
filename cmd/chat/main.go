@@ -22,5 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("stream failed: %v", err)
 	}
-	reportStream(sr)
+	if err := reportStream(sr); err != nil {
+		log.Fatalf("reportStream failed: %v", err)
+	}
 }

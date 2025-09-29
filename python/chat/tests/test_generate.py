@@ -5,10 +5,10 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.outputs import ChatResult
+from langchain_core.outputs import ChatResult, ChatGeneration
 from langchain_core.language_models import BaseChatModel
 
-from generate import generate, generate_with_retry, is_retryable_error, RETRY_BASE_DELAY, MAX_RETRIES
+from chat.generate import generate, generate_with_retry, is_retryable_error, RETRY_BASE_DELAY, MAX_RETRIES
 
 
 class MockChatModel(BaseChatModel):
@@ -16,22 +16,22 @@ class MockChatModel(BaseChatModel):
 
     def __init__(self, should_fail=False, fail_times=1):
         super().__init__()
-        self.should_fail = should_fail
-        self.fail_times = fail_times
-        self.call_count = 0
+        self._should_fail = should_fail
+        self._fail_times = fail_times
+        self._call_count = 0
 
     async def ainvoke(self, messages, config=None):
-        self.call_count += 1
-        if self.should_fail and self.call_count <= self.fail_times:
-            if self.fail_times == 1:
-                raise Exception("Mock error")
+        self._call_count += 1
+        if self._should_fail and self._call_count <= self._fail_times:
+            if self._fail_times == 1:
+                raise Exception("Mock validation error")
             else:
                 raise Exception("Network timeout error")
 
         # Return a mock result
-        result = ChatResult(generations=[
-            MagicMock(message=AIMessage(content=f"Mock response {self.call_count}"))
-        ])
+        message = AIMessage(content=f"Mock response {self._call_count}")
+        generation = ChatGeneration(message=message)
+        result = ChatResult(generations=[generation])
         return result
 
     def _generate(self, messages, stop=None, run_manager=None):
@@ -53,7 +53,7 @@ async def test_generate_success():
 
     assert isinstance(result, AIMessage)
     assert "Mock response 1" in result.content
-    assert model.call_count == 1
+    assert model._call_count == 1
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_generate_error():
     with pytest.raises(Exception):
         await generate(model, messages)
 
-    assert model.call_count == 1
+    assert model._call_count == 1
 
 
 @pytest.mark.asyncio
@@ -79,7 +79,7 @@ async def test_generate_with_retry_succeeds_after_retry():
 
     assert isinstance(result, AIMessage)
     assert "Mock response 3" in result.content
-    assert model.call_count == 3
+    assert model._call_count == 3
 
 
 @pytest.mark.asyncio
@@ -89,11 +89,11 @@ async def test_generate_with_retry_non_retryable():
     messages = [HumanMessage(content="Hello")]
 
     with patch('chat.generate.RETRY_BASE_DELAY', 0.001):
-        result = await generate_with_retry(model, messages)
+        with pytest.raises(Exception, match="Mock validation error"):
+            await generate_with_retry(model, messages)
 
-    # Should return the result after one attempt since error is not retryable
-    assert isinstance(result, AIMessage)
-    assert model.call_count == 1
+    # Should not retry since error is not retryable
+    assert model._call_count == 1
 
 
 @pytest.mark.asyncio
@@ -106,7 +106,7 @@ async def test_generate_with_retry_max_retries():
         with pytest.raises(Exception):
             await generate_with_retry(model, messages)
 
-    assert model.call_count == MAX_RETRIES
+    assert model._call_count == MAX_RETRIES
 
 
 def test_is_retryable_error():
